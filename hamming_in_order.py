@@ -1,6 +1,7 @@
 from queue import PriorityQueue
 import numpy as np
 from PIL import Image as im
+import math
 
 class HammingInOrderGraph:
     def __init__(self, r_val):
@@ -9,23 +10,85 @@ class HammingInOrderGraph:
         self.n = pow(2, r_val) - 1
         self.k = self.n - self.r
         self.t = int((self.n * (self.n - 1)) / 6)
+        self.P_count = pow(2, self.k)
         print(f'Hamming In-Order Graph (r = {self.r}):\t(n,k,d) = ({self.n},{self.k},3)\t|M| = {self.t}')
         
+        #add placeholders (save work in case we don't need it)
+        self.H = []
+        self.Hp = []
+        self.swaps = []
+        self.G = []
+        self.Gp = []
+        self.M = []
+        self.V = []
+        self.E = []
+    
+    def buildH(self):
         #generate H (parity check matrix)
         self.H = []
         for i in range(1, self.n + 1):
             self.H.append(self.bin_str(i, self.r))
         
-        #generate G (generating matrix)
-        self.G = []
+        #generate H' (parity check matrix in standard form) by performing row swaps
+        self.Hp = []
+        self.swaps = []
+        for row in self.H:
+            self.Hp.append(row)
+        for i in range(self.r):
+            start = pow(2, self.r - 1 - i) - 1
+            #check value of ith row - have we already swapped?
+            if int(self.Hp[i],2) != pow(2, self.r - 1 - i):
+                from_row = start
+                to_row = i
+                while True:
+                    self.swaps.insert(0,(to_row,from_row))
+                    self.Hp[to_row] = self.H[from_row] #perform swap
+                    from_row = to_row #increment from_row
+                    if self.isPowerOfTwo((val := int(self.H[to_row],2))):
+                        to_row = self.r - 1 - int(math.log2(val)) #increment to_row
+                    else:
+                        break
+                self.Hp[start] = self.H[from_row] #perform final swap
+                self.swaps.insert(0,(start,from_row))
+    
+    def printH(self):
+        if self.H == []:
+            self.buildH()
+        self.printListAsMatrix(self.H,"H")
+        self.printListAsMatrix(self.Hp,"H'")
+    
+    def buildG(self):
+        if self.H == []:
+            self.buildH()
+        
+        #generate G' (generating matrix in standard form)
+        self.Gp = []
         for i in range(self.k):
-            word = self.H[i + self.r] # this row of A
+            word = self.Hp[i + self.r] # this row of A
             for j in range(i):
                 word += "0" # left padding for this row of I
             word += "1"
             while len(word) < self.n:
                 word += "0" # right padding for this row of I
-            self.G.append(word)
+            self.Gp.append(word)
+        
+        #generate G (generating matrix) by performing column swaps
+        self.G = []
+        for row in self.Gp:
+            self.G.append(row)
+        for (from_col, to_col) in self.swaps:
+            for i in range(self.k):
+                self.G[i] = self.G[i][:to_col] + self.Gp[i][from_col] + self.G[i][(to_col + 1):]
+    
+    def printG(self):
+        if self.G == []:
+            self.buildG()
+        self.printListAsMatrix(self.Gp,"G'")
+        self.printListAsMatrix(self.G,"G")
+    
+    def buildM(self):
+        if self.H == []:
+            self.buildH()
         
         #generate M (set of non-zero min weight codewords)
         self.M = []
@@ -40,9 +103,17 @@ class HammingInOrderGraph:
                     v[r2] = 1
                     v[r3] = 1
                     self.M.insert(0,''.join(map(str,v)))
+    
+    def printM(self):
+        if self.M == []:
+            self.buildM()
+        self.printListAsMatrix(self.M,"M")
+    
+    def buildV(self):
+        if self.G == []:
+            self.buildG()
         
         #generate V (vertex set)
-        self.P_count = pow(2, self.k)
         self.V = []
         for i in range(self.P_count):
             w = self.bin_str(i, self.k)
@@ -51,6 +122,18 @@ class HammingInOrderGraph:
                 if w[j] == "1":
                     x = x ^ int(self.G[j],2)
             self.V.append(x)
+    
+    def printV(self):
+        if self.V == []:
+            self.buildV()
+        
+        print() # print blank line for spacing
+        for i in range(len(self.V)):
+            print(f'v{i} =\t{self.bin_str(i, self.k)} * G =\t{self.bin_str(self.V[i], self.n)}')
+    
+    def buildE(self):
+        if self.V == []:
+            self.buildV()
         
         #generate E (edge set) as adjacency matrix
         self.E = [[0 for j in range(self.P_count)] for i in range(self.P_count)]
@@ -61,28 +144,19 @@ class HammingInOrderGraph:
                 if self.weight(u ^ v) == 3:
                     self.E[i][j] = 1
                     self.E[j][i] = 1
-            
-    def printG(self):
-        self.printListAsMatrix(self.G,"G")
-    
-    def printH(self):
-        self.printListAsMatrix(self.H,"H")
-        
-    def printM(self):
-        self.printListAsMatrix(self.M,"M")
-    
-    def printV(self):
-        print() # print blank line for spacing
-        for i in range(len(self.V)):
-            print(f'v{i} =\t{self.bin_str(i, self.k)} * G =\t{self.bin_str(self.V[i], self.n)}')
     
     def printE_Mtx(self):
+        if self.E == []:
+            self.buildE()
         edges = []
         for i in range(self.P_count):
             edges.append(''.join(map(str,self.E[i])))
         self.printListAsMatrix(edges, "Edges")
     
     def printE(self):
+        if self.E == []:
+            self.buildE()
+        print() # print blank line for spacing
         #print as neighbor set
         for i in range(self.P_count):
             neighbors = ""
@@ -92,6 +166,8 @@ class HammingInOrderGraph:
             print(f'v{i}: ({neighbors} )')
     
     def drawE(self):
+        if self.E == []:
+            self.buildE()
         array = np.array(self.E).astype(np.uint8)
         for i in range(self.P_count):
             for j in range(self.P_count):
@@ -107,6 +183,10 @@ class HammingInOrderGraph:
             if c == "1":
                 w += 1
         return w
+    
+    def isPowerOfTwo(self, num):
+        power = int (math.log(num, 2) + 0.5)
+        return (2 ** power) == num
     
     def bin_str(self, x, length):
         s = str(bin(x))
@@ -128,16 +208,23 @@ class HammingInOrderGraph:
                 print(f'\t|{word} |')
             else:
                 print(f'\t⌊{word} ⌋')
+    
+    def test(self):
+        self.printH()
+        self.printG()
+        self.printM()
+        self.printV()
+        if self.r < 4:
+            self.printE_Mtx()
+        self.printE()
+        self.drawE()
 
-def testIOR(r):
-    hc = HammingInOrderGraph(r)
-    hc.printH()
-    hc.printG()
-    hc.printM()
-    hc.printV()
-    hc.printE()
-    hc.drawE()
+def testR(r):
+    hg = HammingInOrderGraph(r)
+    hg.test()
 
-testIOR(3)
+# Test with r=3
+testR(3)
 
-testIOR(4)
+# Test with r=4
+testR(4)

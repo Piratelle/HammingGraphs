@@ -1,6 +1,7 @@
 from queue import PriorityQueue
 import numpy as np
 from PIL import Image as im
+import math
 
 class HammingGraph:
     def __init__(self, r_val):
@@ -9,8 +10,17 @@ class HammingGraph:
         self.n = pow(2, r_val) - 1
         self.k = self.n - self.r
         self.t = int((self.n * (self.n - 1)) / 6)
+        self.P_count = pow(2, self.k)
         print(f'Hamming Graph (r = {self.r}):\t(n,k,d) = ({self.n},{self.k},3)\t|M| = {self.t}')
         
+        #add placeholders (save work in case we don't need it)
+        self.H = []
+        self.G = []
+        self.M = []
+        self.V = []
+        self.E = []
+    
+    def buildH(self):
         #generate words for H
         hq = PriorityQueue()
         for i in range(1, self.n + 1):
@@ -22,6 +32,15 @@ class HammingGraph:
         self.H = []
         while not hq.empty():
             self.H.append(hq.get()[1])
+    
+    def printH(self):
+        if self.H == []:
+            self.buildH()
+        self.printListAsMatrix(self.H,"H")
+    
+    def buildG(self):
+        if self.H == []:
+            self.buildH()
         
         #generate G (generating matrix)
         self.G = []
@@ -33,6 +52,15 @@ class HammingGraph:
             while len(word) < self.n:
                 word += "0" # right padding for this row of I
             self.G.append(word)
+    
+    def printG(self):
+        if self.G == []:
+            self.buildG()
+        self.printListAsMatrix(self.G,"G")
+    
+    def buildM(self):
+        if self.H == []:
+            self.buildH()
         
         #generate M (set of non-zero min weight codewords)
         self.M = []
@@ -47,9 +75,17 @@ class HammingGraph:
                     v[r2] = 1
                     v[r3] = 1
                     self.M.insert(0,''.join(map(str,v)))
+    
+    def printM(self):
+        if self.M == []:
+            self.buildM()
+        self.printListAsMatrix(self.M,"M")
+    
+    def buildV(self):
+        if self.G == []:
+            self.buildG()
         
         #generate V (vertex set)
-        self.P_count = pow(2, self.k)
         self.V = []
         for i in range(self.P_count):
             w = self.bin_str(i, self.k)
@@ -58,6 +94,18 @@ class HammingGraph:
                 if w[j] == "1":
                     x = x ^ int(self.G[j],2)
             self.V.append(x)
+    
+    def printV(self):
+        if self.V == []:
+            self.buildV()
+        
+        print() # print blank line for spacing
+        for i in range(len(self.V)):
+            print(f'v{i} =\t{self.bin_str(i, self.k)} * G =\t{self.bin_str(self.V[i], self.n)}')
+    
+    def buildE(self):
+        if self.V == []:
+            self.buildV()
         
         #generate E (edge set) as adjacency matrix
         self.E = [[0 for j in range(self.P_count)] for i in range(self.P_count)]
@@ -68,28 +116,19 @@ class HammingGraph:
                 if self.weight(u ^ v) == 3:
                     self.E[i][j] = 1
                     self.E[j][i] = 1
-            
-    def printG(self):
-        self.printListAsMatrix(self.G,"G")
-    
-    def printH(self):
-        self.printListAsMatrix(self.H,"H")
-        
-    def printM(self):
-        self.printListAsMatrix(self.M,"M")
-    
-    def printV(self):
-        print() # print blank line for spacing
-        for i in range(len(self.V)):
-            print(f'v{i} =\t{self.bin_str(i, self.k)} * G =\t{self.bin_str(self.V[i], self.n)}')
     
     def printE_Mtx(self):
+        if self.E == []:
+            self.buildE()
         edges = []
         for i in range(self.P_count):
             edges.append(''.join(map(str,self.E[i])))
         self.printListAsMatrix(edges, "Edges")
     
     def printE(self):
+        if self.E == []:
+            self.buildE()
+        print() # print blank line for spacing
         #print as neighbor set
         for i in range(self.P_count):
             neighbors = ""
@@ -99,6 +138,8 @@ class HammingGraph:
             print(f'v{i}: ({neighbors} )')
     
     def drawE(self):
+        if self.E == []:
+            self.buildE()
         array = np.array(self.E).astype(np.uint8)
         for i in range(self.P_count):
             for j in range(self.P_count):
@@ -136,15 +177,22 @@ class HammingGraph:
             else:
                 print(f'\t⌊{word} ⌋')
     
-def testR(r):
-    hc = HammingGraph(r)
-    hc.printH()
-    hc.printG()
-    hc.printM()
-    hc.printV()
-    hc.printE()
-    hc.drawE()
+    def test(self):
+        self.printH()
+        self.printG()
+        self.printM()
+        self.printV()
+        if self.r < 4:
+            self.printE_Mtx()
+        self.printE()
+        self.drawE()
 
+def testR(r):
+    hg = HammingGraph(r)
+    hg.test()
+
+# Test with r=3
 testR(3)
 
+# Test with r=4
 testR(4)
